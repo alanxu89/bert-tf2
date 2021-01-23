@@ -128,15 +128,73 @@ class BertModel:
             input_mask = tf.ones(
                 shape=[batch_size, seq_length], dtype=tf.int32)
 
+        self.word_embedding = layers.Embedding(
+            config.vocab_size,
+            config.embedding_size,
+            create_initializer(config.initializer_range))
+
         if token_type_ids is None:
             token_type_ids = tf.zeros(
                 shape=[batch_size, seq_length], dtype=tf.int32)
+        self.token_type_embedding = TokenTypeEmbedding(
+            config.type_vocab_size,
+            config.embedding_size,
+            create_initializer(config.initializer_range))
 
-        self.embedding = layers.Embedding(
-            config.vocab_size, config.embedding_size, tf.keras.initializers.TruncatedNormal(
-                stddev=config.initializer_range))
+        self.position_embedding = PositionEmbedding(
+            config.maximum_position_encoding,
+            create_initializer(config.initializer_range))
 
-        self.position_embedding = PositionEmbedding(maximum_position_encoding)
+
+def create_initializer(initializer_range=0.02):
+    """Creates a `truncated_normal_initializer` with the given range."""
+    return tf.keras.initializers.TruncatedNormal(stddev=initializer_range)
+
+
+class TokenTypeEmbedding(tf.keras.layers.Layer):
+    def __init__(self,
+                 token_type_vocab_size,
+                 width,
+                 initializer,
+                 **kwargs):
+        super(TokenTypeEmbedding, self).__init__(**kwargs)
+        self.token_type_vocab_size = token_type_vocab_size
+        self.width = width
+        self.initializer = initializer
+
+    def build(self, input_shape):
+        input_shape = input_shape.as_list()
+        if len(input_shape) != 2:
+            raise ValueError("TokenTypeEmbedding expects a 2-dimensional input tensor "
+                             "of shape [batch, sequence], got "
+                             "{}".format(input_shape))
+        self.batch_size = input_shape[0]
+        self.seq_length = input_shape[1]
+
+        self.kernel = self.add_weight(
+            "kernel",
+            shape=[self.token_type_vocab_size, self.width],
+            initializer=self.initializer)
+        super(PositionEmbedding, self).build(input_shape)
+
+    def call(self, input):
+        # This vocab will be small so we always do one-hot here,
+        # since it is always faster for a small vocabulary.
+        # input shape: [batch_size, seq_length]
+        # output_shape: [batch_size, seq_length, width]
+
+        # [batch_size, seq_length] => [batch_size*seq_length]
+        flat_token_type_ids = tf.reshape(input, [-1])
+
+        # [batch_size*seq_length] => [batch_size*seq_length, vocab_size]
+        one_hot_ids = tf.one_hot(
+            flat_token_type_ids, depth=self.token_type_vocab_size)
+
+        # get shape [batch_size*seq_length, width]
+        token_type_embeddings = tf.matmul(one_hot_ids, self.kernel)
+
+        return tf.reshape(token_type_embeddings,
+                          [self.batch_size, self.seq_length, self.width])
 
 
 class PositionEmbedding(tf.keras.layers.Layer):
@@ -144,21 +202,13 @@ class PositionEmbedding(tf.keras.layers.Layer):
 
     def __init__(self,
                  max_length,
-                 initializer="glorot_uniform",
+                 initializer,
                  **kwargs):
         super(PositionEmbedding, self).__init__(**kwargs)
         if max_length is None:
             raise ValueError("`max_length` must be an Integer, not `None`.")
         self.max_length = max_length
         self.initializer = initializer
-
-    def get_config(self):
-        config = {
-            "max_length": self.max_length,
-            "initializer": self.initializer
-        }
-        base_config = super(PositionEmbedding, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
 
     def build(self, input_shape):
         dimension_list = input_shape.as_list()
@@ -189,5 +239,6 @@ if __name__ == "__main__":
     print(emb.get_config())
     position_embedding = PositionEmbedding(max_length=100)
     inputs = tf.keras.Input((50, 32), dtype=tf.float32)
+    inputs = tf.constant(np.random.randn(2, 3, 4))
     outputs = position_embedding(inputs)
     print(outputs)
