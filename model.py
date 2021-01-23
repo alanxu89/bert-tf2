@@ -4,9 +4,7 @@ import copy
 import json
 
 import numpy as np
-
 import tensorflow as tf
-from tensorflow.keras import layers
 
 
 class BertConfig:
@@ -128,7 +126,7 @@ class BertModel:
             input_mask = tf.ones(
                 shape=[batch_size, seq_length], dtype=tf.int32)
 
-        self.word_embedding = layers.Embedding(
+        self.word_embedding = tf.keras.layers.Embedding(
             config.vocab_size,
             config.embedding_size,
             create_initializer(config.initializer_range))
