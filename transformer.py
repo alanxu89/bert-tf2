@@ -46,6 +46,24 @@ def create_look_ahead_mask(size):
 
 
 def scaled_dot_product_attention(q, k, v, mask):
+    """Calculate the attention weights.
+    q, k, v must have matching leading dimensions.
+    k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.
+    The mask has different shapes depending on its type(padding or look ahead) 
+    but it must be broadcastable for addition.
+
+    Args:
+        q: query shape == (..., seq_len_q, depth)
+        k: key shape == (..., seq_len_k, depth)
+        v: value shape == (..., seq_len_v, depth_v)
+        mask: Float tensor with shape broadcastable 
+                to (..., seq_len_q, seq_len_k). Defaults to None.
+
+    Returns:
+        output, attention_weights
+    """
+
+    # (..., seq_len_q, seq_len_k)
     matmul_qk = tf.matmul(q, k, transpose_b=True)
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
     scaled_attention_logits = matmul_qk/tf.math.sqrt(dk)
@@ -77,8 +95,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.dense = tf.keras.layers.Dense(d_model)
 
     def split_heads(self, x, batch_size):
-        """Split the last dimension into (num_heads, depth).
-        (batch_size, seq_len, width) => (batch_size, num_heads, seq_len, depth)
+        """Split the last dimension (width) into (num_heads, depth), then transpose:
+            (batch_size, seq_len, width) => (batch_size, num_heads, seq_len, depth)
+        Note: this is NOT splitting the seq_len dimension
         """
         x = tf.reshape(x, [batch_size, -1, self.num_heads, self.depth])
         return tf.transpose(x, perm=[0, 2, 1, 3])

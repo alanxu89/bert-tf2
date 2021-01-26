@@ -8,17 +8,17 @@ class WordEmbedding(tf.keras.layers.Layer):
     float embeddings.
 
     Args:
-    vocab_size: Number of elements in the vocabulary.
-    embedding_width: Output size of the embedding layer.
-    initializer: The initializer to use for the embedding weights. Defaults to
-        "glorot_uniform".
-    use_one_hot: Whether to use tf.one_hot over tf.gather for the embedding
-        lookup. Defaults to False (that is, using tf.gather). Setting this option
-        to True may improve performance, especially on small vocabulary sizes, but
-        will generally require more memory.
-    scale_factor: Whether to scale the output embeddings. Defaults to None (that
-        is, not to scale). Setting this option to a float will let values in
-        output embeddings multiplied by scale_factor.
+        vocab_size: Number of elements in the vocabulary.
+        embedding_width: Output size of the embedding layer.
+        initializer: The initializer to use for the embedding weights. Defaults to
+            "glorot_uniform".
+        use_one_hot: Whether to use tf.one_hot over tf.gather for the embedding
+            lookup. Defaults to False (that is, using tf.gather). Setting this option
+            to True may improve performance, especially on small vocabulary sizes, but
+            will generally require more memory.
+        scale_factor: Whether to scale the output embeddings. Defaults to None (that
+            is, not to scale). Setting this option to a float will let values in
+            output embeddings multiplied by scale_factor.
     """
 
     def __init__(self,
