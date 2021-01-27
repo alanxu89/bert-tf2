@@ -10,6 +10,11 @@ class SelfAttentionMask(tf.keras.layers.Layer):
         inputs[1]: to_mask: int32 Tensor of shape [batch_size, to_seq_length].
     Output:
         float Tensor of shape [batch_size, from_seq_length, to_seq_length].
+    Notes:
+        The result is used for broadcasting the key mask to the shape of self 
+        attention logits, which is calculate from the mat prod of query and key^T. 
+        This basically means that every word (along the seq_len dimension) 
+        in the query should see the same mask of the key sequence. 
     """
 
     def call(self, inputs, to_mask):
@@ -28,12 +33,3 @@ class SelfAttentionMask(tf.keras.layers.Layer):
         mask = broadcast_ones * to_mask
 
         return mask
-
-
-if __name__ == "__main__":
-    attention_mask = SelfAttentionMask()
-    inputs = tf.random.uniform([2, 4, 3])
-    to_mask = tf.constant([[0, 1, 0], [1, 1, 0]])
-    new_mask = attention_mask(inputs, to_mask)
-    print(to_mask)
-    print(new_mask)
