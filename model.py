@@ -86,7 +86,7 @@ class BertConfig:
         return json.dumps(self.to_dict(), sort_keys=False, indent=2) + "\n"
 
 
-class BertModel:
+class BertModel(tf.keras.Model):
     """BERT model ("Bidirectional Encoder Representations from Transformers")."""
 
     def __init__(self,
@@ -145,6 +145,16 @@ class BertModel:
         self.position_embedding = PositionEmbedding(
             config.maximum_position_encoding,
             create_initializer(config.initializer_range))
+
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token. We assume that this has been pre-trained
+        first_token_tensor = encoder_output[:, 0, :]
+        pooler_layer = tf.keras.layers.Dense(
+            units=config.hidden_size,
+            activation='tanh',
+            kernel_initializer=create_initializer(config.initializer_range),
+            name='pooler_transform')
+        cls_output = pooler_layer(first_token_tensor)
 
 
 def create_initializer(initializer_range=0.02):
