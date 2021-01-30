@@ -29,16 +29,16 @@ class WordEmbedding(tf.keras.layers.Layer):
                  scale_factor=None,
                  **kwargs):
         super(WordEmbedding, self).__init__(**kwargs)
-        self.vocab_size = vocab_size
-        self.embedding_width = embedding_width
-        self.initializer = tf.keras.initializer.get(initializer)
+        self._vocab_size = vocab_size
+        self._embedding_width = embedding_width
+        self.initializer = tf.keras.initializers.get(initializer)
         self.use_one_hot = use_one_hot
         self.scale_factor = scale_factor
 
     def build(self, input_shape):
-        self.embedding_table = self.add_weight(
+        self._embedding_table = self.add_weight(
             "embedding_table",
-            shape=[self.vocab_size, self.embedding_width],
+            shape=[self._vocab_size, self._embedding_width],
             initializer=self.initializer,
             dtype=tf.float32)
 
@@ -49,29 +49,29 @@ class WordEmbedding(tf.keras.layers.Layer):
         if self.use_one_hot:
             # (batch_size*seq_length, vocab_size)
             one_hot_data = tf.one_hot(
-                flat_inputs, depth=self.vocab_size, dtype=tf.float32)
-            embeddings = tf.matmul(one_hot_data, self.embedding_table)
+                flat_inputs, depth=self._vocab_size, dtype=tf.float32)
+            embeddings = tf.matmul(one_hot_data, self._embedding_table)
         else:
-            embeddings = tf.gather(self.embedding_table, flat_inputs)
+            embeddings = tf.gather(self._embedding_table, flat_inputs)
         to_shape = tf.concat(
-            [tf.shape(inputs), [self.embedding_width]], axis=0)
+            [tf.shape(inputs), [self._embedding_width]], axis=0)
         embeddings = tf.reshape(embeddings, to_shape)
 
         if self.scale_factor is not None:
-            return embeddings *= self.scale_factor
+            embeddings *= self.scale_factor
         return embeddings
 
     @property
     def vocab_size(self):
-        return self.vocab_size
+        return self._vocab_size
 
     @property
     def embedding_width(self):
-        return self.embedding_width
+        return self._embedding_width
 
     @property
     def embedding_table(self):
-        return self.embedding_table
+        return self._embedding_table
 
 
 class TokenTypeEmbedding(tf.keras.layers.Layer):
@@ -86,19 +86,19 @@ class TokenTypeEmbedding(tf.keras.layers.Layer):
         self.initializer = initializer
 
     def build(self, input_shape):
-        input_shape = input_shape.as_list()
-        if len(input_shape) != 2:
+        dimension_list = input_shape.as_list()
+        if len(dimension_list) != 2:
             raise ValueError("TokenTypeEmbedding expects a 2-dimensional input tensor "
                              "of shape [batch, sequence], got "
-                             "{}".format(input_shape))
-        self.batch_size = input_shape[0]
-        self.seq_length = input_shape[1]
+                             "{}".format(dimension_list))
+        self.batch_size = dimension_list[0]
+        self.seq_length = dimension_list[1]
 
         self.kernel = self.add_weight(
             "kernel",
             shape=[self.token_type_vocab_size, self.width],
             initializer=self.initializer)
-        super(PositionEmbedding, self).build(input_shape)
+        super(TokenTypeEmbedding, self).build(input_shape)
 
     def call(self, input):
         # This vocab will be small so we always do one-hot here,
@@ -125,7 +125,7 @@ class PositionEmbedding(tf.keras.layers.Layer):
 
     def __init__(self,
                  max_length,
-                 initializer,
+                 initializer='glorot_uniform',
                  **kwargs):
         super(PositionEmbedding, self).__init__(**kwargs)
         if max_length is None:
@@ -154,10 +154,11 @@ class PositionEmbedding(tf.keras.layers.Layer):
 
 
 if __name__ == "__main__":
-    emb = PositionEmbedding(100)
-    print(emb.get_config())
+    # emb = PositionEmbedding(100, 'glorot_uniform')
+    # print(emb.get_config())
     position_embedding = PositionEmbedding(max_length=100)
-    inputs = tf.keras.Input((50, 32), dtype=tf.float32)
-    inputs = tf.constant(np.random.randn(2, 3, 4))
+    # inputs = tf.keras.Input((50, 32), dtype=tf.float32)
+    inputs = tf.constant([[[0, 1, 2, 3], [4, 2, 3, 4], [2, 32, 2, 1]], [
+                         [0, 1, 2, 3], [4, 2, 3, 4], [2, 32, 2, 1]]])
     outputs = position_embedding(inputs)
     print(outputs)

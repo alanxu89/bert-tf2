@@ -7,6 +7,8 @@ import numpy as np
 import tensorflow as tf
 
 from embedding import WordEmbedding, PositionEmbedding, TokenTypeEmbedding
+from self_attention_mask import SelfAttentionMask
+from transformer_encoder import Encoder
 
 
 class BertConfig:
@@ -89,80 +91,109 @@ class BertConfig:
 class BertModel(tf.keras.Model):
     """BERT model ("Bidirectional Encoder Representations from Transformers")."""
 
-    def __init__(self,
-                 config,
-                 is_training,
-                 input_ids,
-                 input_mask=None,
-                 token_type_ids=None,
-                 use_one_hot_embeddings=False,
-                 scope=None
-                 ):
+    def __init__(self, config: BertConfig, use_one_hot_embeddings=False, scope=None):
         """Constructor for BertModel.
 
         Args:
-        config: `BertConfig` instance.
-        is_training: bool. true for training model, false for eval model. 
-            Controls whether dropout will be applied.
-        input_ids: int32 Tensor of shape [batch_size, seq_length].
-        input_mask: (optional) int32 Tensor of shape [batch_size, seq_length].
-        token_type_ids: (optional) int32 Tensor of shape [batch_size, seq_length].
-        use_one_hot_embeddings: (optional) bool. Whether to use one-hot word
-            embeddings or tf.embedding_lookup() for the word embeddings.
-        scope: (optional) variable scope. Defaults to "bert".
-
-        Raises:
-        ValueError: The config is invalid or one of the input tensor shapes
-            is invalid.
+            config: `BertConfig` instance.
+            use_one_hot_embeddings: (optional) bool. Whether to use one-hot word
+                embeddings or tf.embedding_lookup() for the word embeddings.
+            scope: (optional) variable scope. Defaults to "bert".
         """
-        config = copy.deepcopy(config)
-        if not is_training:
-            config.hidden_dropout_prob = 0.0
-            config.attention_probs_dropout_prob = 0.0
+        super(BertModel, self).__init__()
 
-        input_shape = input_ids.shape.as_list()
-        batch_size = input_shape[0]
-        seq_length = input_shape[1]
+        self.config = copy.deepcopy(config)
 
-        if input_mask is None:
-            input_mask = tf.ones(
-                shape=[batch_size, seq_length], dtype=tf.int32)
+        self.initializer = tf.keras.initializers.TruncatedNormal(
+            stddev=self.config.initializer_range)
 
         self.word_embedding = WordEmbedding(
-            config.vocab_size,
-            config.embedding_size,
-            create_initializer(config.initializer_range),
+            self.config.vocab_size,
+            self.config.hidden_size,
+            self.initializer,
             use_one_hot_embeddings)
+
+        self.token_type_embedding = TokenTypeEmbedding(
+            self.config.type_vocab_size,
+            self.config.hidden_size,
+            self.initializer)
+
+        self.position_embedding = PositionEmbedding(
+            config.max_position_embeddings,
+            self.initializer)
+
+        self.attention_mask = SelfAttentionMask()
+
+        self.transformer_encoder = Encoder(config.num_hidden_layers,
+                                           config.hidden_size,
+                                           config.num_attention_heads,
+                                           config.intermediate_size,
+                                           config.vocab_size,
+                                           config.max_position_embeddings,
+                                           config.hidden_dropout_prob)
+
+        self.pooler_layer = tf.keras.layers.Dense(
+            units=self.config.hidden_size,
+            activation='tanh',
+            kernel_initializer=self.initializer,
+            name='pooler_transform')
+
+    def build(self, input_shape):
+        self.batch_size = input_shape[0]
+        self.seq_length = input_shape[1]
+
+    def call(self, input_ids, input_mask=None, token_type_ids=None, is_training=False):
+        """
+        Args:
+            input_ids: int32 Tensor of shape [batch_size, seq_length].
+            input_mask: (optional) int32 Tensor of shape [batch_size, seq_length].
+            token_type_ids: (optional) int32 Tensor of shape [batch_size, seq_length].
+            is_training: bool. true for training model, false for eval model. 
+                Controls whether dropout will be applied.
+        Return:
+            (batch_size, seq_len, hidden_size)
+        """
+        if input_mask is None:
+            input_mask = tf.ones(
+                shape=[self.batch_size, self.seq_length], dtype=tf.int32)
 
         if token_type_ids is None:
             token_type_ids = tf.zeros(
-                shape=[batch_size, seq_length], dtype=tf.int32)
-        self.token_type_embedding = TokenTypeEmbedding(
-            config.type_vocab_size,
-            config.embedding_size,
-            create_initializer(config.initializer_range))
+                shape=[self.batch_size, self.seq_length], dtype=tf.int32)
 
-        self.position_embedding = PositionEmbedding(
-            config.maximum_position_encoding,
-            create_initializer(config.initializer_range))
+        if not is_training:
+            self.config.hidden_dropout_prob = 0.0
+            self.config.attention_probs_dropout_prob = 0.0
+
+        x = self.word_embedding(input_ids)
+        x += self.position_embedding(x)
+        x += self.token_type_embedding(token_type_ids)
+
+        attn_mask = self.attention_mask(x, input_mask)
+
+        enc_out = self.transformer_encoder(x, is_training, attn_mask)
 
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token. We assume that this has been pre-trained
-        first_token_tensor = encoder_output[:, 0, :]
-        pooler_layer = tf.keras.layers.Dense(
-            units=config.hidden_size,
-            activation='tanh',
-            kernel_initializer=create_initializer(config.initializer_range),
-            name='pooler_transform')
-        cls_output = pooler_layer(first_token_tensor)
+        first_token_tensor = enc_out[:, 0, :]
 
+        output = self.pooler_layer(first_token_tensor)
 
-def create_initializer(initializer_range=0.02):
-    """Creates a `truncated_normal_initializer` with the given range."""
-    return tf.keras.initializers.TruncatedNormal(stddev=initializer_range)
+        return output
 
 
 if __name__ == "__main__":
     d = {"vocab_size": 100, "hidden_size": 1024}
     config = BertConfig.from_dict(d)
+    # print(config.to_json_string())
+
+    config = BertConfig(2000)
     print(config.to_json_string())
+
+    bert_model = BertModel(config)
+
+    input_ids = tf.constant([[1, 2, 3], [4, 5, 6]], dtype=tf.int32)
+
+    output = bert_model(input_ids)
+
+    bert_model.summary()

@@ -23,7 +23,7 @@ class MaskedLM(tf.keras.layers.Layer):
         super(MaskedLM, self).__init__()
         self.embedding_table = embedding_table
         self.activation = activation
-        self.initializer = tf.keras.initializer.get(initializer)
+        self.initializer = tf.keras.initializers.get(initializer)
 
         if output not in ("predictions", "logits"):
             raise ValueError(
