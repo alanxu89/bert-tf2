@@ -9,6 +9,7 @@ import tensorflow as tf
 from embedding import WordEmbedding, PositionEmbedding, TokenTypeEmbedding
 from self_attention_mask import SelfAttentionMask
 from transformer_encoder import Encoder
+from masked_lm import MaskedLM
 
 
 class BertConfig:
@@ -138,11 +139,20 @@ class BertModel(tf.keras.Model):
             kernel_initializer=self.initializer,
             name='pooler_transform')
 
+    def get_embedding_table(self):
+        return self.word_embedding.embedding_table()
+
     def build(self, input_shape):
         self.batch_size = input_shape[0]
         self.seq_length = input_shape[1]
 
-    def call(self, input_ids, input_mask=None, token_type_ids=None, is_training=False):
+        self.word_embedding.build(input_shape)
+        self.masked_lm = MaskedLM(self.word_embedding.embedding_table(),
+                                  activation='tanh',
+                                  name='cls/predictions')
+
+    def call(self, input_ids, masked_lm_positions,
+             input_mask=None, token_type_ids=None, is_training=False):
         """
         Args:
             input_ids: int32 Tensor of shape [batch_size, seq_length].
@@ -179,7 +189,10 @@ class BertModel(tf.keras.Model):
 
         output = self.pooler_layer(first_token_tensor)
 
-        return output
+        lm_outputs = self.masked_lm(
+            enc_out, masked_positions=masked_lm_positions)
+
+        return lm_outputs
 
 
 if __name__ == "__main__":
@@ -192,8 +205,16 @@ if __name__ == "__main__":
 
     bert_model = BertModel(config)
 
-    input_ids = tf.constant([[1, 2, 3], [4, 5, 6]], dtype=tf.int32)
+    input_ids = tf.constant(np.random.randint(
+        2000, size=(16, 128)), dtype=tf.int32)
 
-    output = bert_model(input_ids)
+    masked_lm_positions = tf.constant(
+        np.random.randint(129, size=(16, 32)), dtype=tf.int32)
+
+    output = bert_model(input_ids, masked_lm_positions)
+
+    print("embedding table:", bert_model.get_embedding_table().shape)
+
+    # print(bert_model.inputs)
 
     bert_model.summary()

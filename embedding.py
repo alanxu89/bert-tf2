@@ -69,7 +69,6 @@ class WordEmbedding(tf.keras.layers.Layer):
     def embedding_width(self):
         return self._embedding_width
 
-    @property
     def embedding_table(self):
         return self._embedding_table
 
@@ -160,5 +159,6 @@ if __name__ == "__main__":
     # inputs = tf.keras.Input((50, 32), dtype=tf.float32)
     inputs = tf.constant([[[0, 1, 2, 3], [4, 2, 3, 4], [2, 32, 2, 1]], [
                          [0, 1, 2, 3], [4, 2, 3, 4], [2, 32, 2, 1]]])
+
     outputs = position_embedding(inputs)
     print(outputs)

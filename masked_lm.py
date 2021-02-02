@@ -35,12 +35,12 @@ class MaskedLM(tf.keras.layers.Layer):
         self.dense = tf.keras.layers.Dense(
             self.hidden_size,
             activation=self.activation,
-            initializer=self.initializer,
+            kernel_initializer=self.initializer,
             name="transform/dense")
         self.layer_norm = tf.keras.layers.LayerNormalization(
             axis=-1, epsilon=1e-2, name='transform/LayerNorm')
         self.bias = self.add_weight('output_bias/bias',
-                                    shape=(self.vocab_size,)
+                                    shape=(self.vocab_size,),
                                     initializer="zeros",
                                     trainable=True
                                     )
@@ -61,7 +61,7 @@ class MaskedLM(tf.keras.layers.Layer):
         lm_data = tf.matmul(lm_data, self.embedding_table, transpose_b=True)
         logits = tf.nn.bias_add(lm_data, self.bias)
 
-        masked_positions_length = masked_positions.shape.as_list[1]
+        masked_positions_length = masked_positions.shape.as_list()[1]
         # => (batch_size, num_predictions, vocab_size)
         logits = tf.reshape(
             logits, [-1, masked_positions_length, self.vocab_size])
